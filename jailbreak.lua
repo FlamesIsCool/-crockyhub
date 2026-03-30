@@ -20,6 +20,11 @@ local Window = Bracket:Window({
 
 local PlayerTab = Window:Tab({Name = "Player"})
 local EspTab = Window:Tab({Name = "ESP"})
+    Size = UDim2.new(0, 520, 0, 520),
+    Position = UDim2.new(0.5, -260, 0.5, -260)
+})
+
+local PlayerTab = Window:Tab({Name = "Player"})
 
 local state = {
     WalkSpeed = 16,
@@ -42,6 +47,9 @@ local espState = {
     Arrows = false,
     HealthESP = false,
     Color = Color3.fromRGB(255, 140, 60)
+    FlySpeed = 75,
+    VehicleFly = false,
+    VehicleFlySpeed = 110
 }
 
 local flyDirection = Vector3.zero
@@ -77,11 +85,30 @@ end
 
 local function applyCharacterStats()
     local humanoid = getHumanoid(LocalPlayer)
+local vehicleFlyConn
+local charAddedConn
+
+local function getCharacter()
+    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+end
+
+local function getHumanoid()
+    local character = getCharacter()
+    return character:FindFirstChildOfClass("Humanoid")
+end
+
+local function applyCharacterStats()
+    local humanoid = getHumanoid()
     if humanoid then
         humanoid.WalkSpeed = state.WalkSpeed
         humanoid.JumpPower = state.JumpPower
         humanoid.UseJumpPower = true
     end
+end
+
+local function getRootPart()
+    local character = getCharacter()
+    return character:FindFirstChild("HumanoidRootPart")
 end
 
 local function stopFly()
@@ -90,6 +117,7 @@ local function stopFly()
         flyConn = nil
     end
     local root = getRootPart(LocalPlayer)
+    local root = getRootPart()
     if root then
         local bv = root:FindFirstChild("CrockyHubFlyVelocity")
         local bg = root:FindFirstChild("CrockyHubFlyGyro")
@@ -107,6 +135,7 @@ end
 local function startFly()
     stopFly()
     local root = getRootPart(LocalPlayer)
+    local root = getRootPart()
     if not root then
         return
     end
@@ -129,6 +158,7 @@ local function startFly()
             return
         end
         local currentRoot = getRootPart(LocalPlayer)
+        local currentRoot = getRootPart()
         if not currentRoot or not flyBodyVelocity or not flyBodyGyro then
             return
         end
@@ -191,6 +221,7 @@ local function setInfJump(enabled)
     end
     infJumpConn = UserInputService.JumpRequest:Connect(function()
         local humanoid = getHumanoid(LocalPlayer)
+        local humanoid = getHumanoid()
         if humanoid then
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
         end
@@ -393,6 +424,74 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
+local function getVehicleSeat()
+    local character = LocalPlayer.Character
+    if not character then
+        return nil
+    end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return nil
+    end
+    local seatPart = humanoid.SeatPart
+    if seatPart and (seatPart:IsA("VehicleSeat") or seatPart:IsA("Seat")) then
+        return seatPart
+    end
+    return nil
+end
+
+local function setVehicleFly(enabled)
+    if vehicleFlyConn then
+        vehicleFlyConn:Disconnect()
+        vehicleFlyConn = nil
+    end
+    if not enabled then
+        return
+    end
+
+    vehicleFlyConn = RunService.Heartbeat:Connect(function(dt)
+        local seat = getVehicleSeat()
+        if not seat then
+            return
+        end
+        local assembly = seat.AssemblyRootPart or seat
+        if not assembly then
+            return
+        end
+
+        local cam = Workspace.CurrentCamera
+        local direction = Vector3.zero
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            direction += cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            direction -= cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            direction -= cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            direction += cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            direction += cam.CFrame.UpVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            direction -= cam.CFrame.UpVector
+        end
+
+        if direction.Magnitude > 0 then
+            assembly.AssemblyLinearVelocity = direction.Unit * state.VehicleFlySpeed
+        else
+            assembly.AssemblyLinearVelocity = Vector3.zero
+        end
+        assembly.AssemblyAngularVelocity = Vector3.zero
+
+        local move = direction.Magnitude > 0 and direction.Unit * state.VehicleFlySpeed * dt or Vector3.zero
+        assembly.CFrame = CFrame.new(assembly.Position + move, assembly.Position + cam.CFrame.LookVector)
+    end)
+end
+
 charAddedConn = LocalPlayer.CharacterAdded:Connect(function()
     task.wait(0.2)
     applyCharacterStats()
@@ -413,6 +512,7 @@ PlayerTab:Slider({
     Callback = function(value)
         state.WalkSpeed = value
         local humanoid = getHumanoid(LocalPlayer)
+        local humanoid = getHumanoid()
         if humanoid then
             humanoid.WalkSpeed = value
         end
@@ -429,6 +529,7 @@ PlayerTab:Slider({
     Callback = function(value)
         state.JumpPower = value
         local humanoid = getHumanoid(LocalPlayer)
+        local humanoid = getHumanoid()
         if humanoid then
             humanoid.UseJumpPower = true
             humanoid.JumpPower = value
@@ -597,6 +698,25 @@ EspTab:Colorpicker({
     Color = espState.Color,
     Callback = function(color)
         espState.Color = color
+PlayerTab:Toggle({
+    Name = "Vehicle Fly",
+    Side = "Right",
+    Value = false,
+    Callback = function(enabled)
+        state.VehicleFly = enabled
+        setVehicleFly(enabled)
+    end
+})
+
+PlayerTab:Slider({
+    Name = "Vehicle Fly Speed",
+    Side = "Right",
+    Min = 10,
+    Max = 500,
+    Value = state.VehicleFlySpeed,
+    Precise = 0,
+    Callback = function(value)
+        state.VehicleFlySpeed = value
     end
 })
 
@@ -611,6 +731,7 @@ local function cleanup()
         removeDrawingSet(set)
     end
     drawings = {}
+    setVehicleFly(false)
     if charAddedConn then
         charAddedConn:Disconnect()
         charAddedConn = nil
