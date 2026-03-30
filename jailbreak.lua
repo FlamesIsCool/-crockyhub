@@ -14,6 +14,12 @@ local Window = Bracket:Window({
     Name = "CrockyHub - Jailbreak",
     Enabled = true,
     Color = Color3.new(1, 0.5, 0.25),
+    Size = UDim2.new(0, 560, 0, 540),
+    Position = UDim2.new(0.5, -280, 0.5, -270)
+})
+
+local PlayerTab = Window:Tab({Name = "Player"})
+local EspTab = Window:Tab({Name = "ESP"})
     Size = UDim2.new(0, 520, 0, 520),
     Position = UDim2.new(0.5, -260, 0.5, -260)
 })
@@ -28,6 +34,19 @@ local state = {
     InfJump = false,
     Noclip = false,
     Fly = false,
+    FlySpeed = 75
+}
+
+local espState = {
+    BoxESP = false,
+    Tracers = false,
+    TeamCheck = false,
+    TeamESP = false,
+    NameESP = false,
+    Distance = false,
+    Arrows = false,
+    HealthESP = false,
+    Color = Color3.fromRGB(255, 140, 60)
     FlySpeed = 75,
     VehicleFly = false,
     VehicleFlySpeed = 110
@@ -39,6 +58,33 @@ local flyBodyGyro
 local flyConn
 local noclipConn
 local infJumpConn
+local charAddedConn
+local espConn
+
+local drawings = {}
+
+local function getCharacter(player)
+    return player.Character
+end
+
+local function getHumanoid(player)
+    local character = getCharacter(player)
+    if not character then
+        return nil
+    end
+    return character:FindFirstChildOfClass("Humanoid")
+end
+
+local function getRootPart(player)
+    local character = getCharacter(player)
+    if not character then
+        return nil
+    end
+    return character:FindFirstChild("HumanoidRootPart")
+end
+
+local function applyCharacterStats()
+    local humanoid = getHumanoid(LocalPlayer)
 local vehicleFlyConn
 local charAddedConn
 
@@ -70,6 +116,7 @@ local function stopFly()
         flyConn:Disconnect()
         flyConn = nil
     end
+    local root = getRootPart(LocalPlayer)
     local root = getRootPart()
     if root then
         local bv = root:FindFirstChild("CrockyHubFlyVelocity")
@@ -87,6 +134,7 @@ end
 
 local function startFly()
     stopFly()
+    local root = getRootPart(LocalPlayer)
     local root = getRootPart()
     if not root then
         return
@@ -109,6 +157,7 @@ local function startFly()
         if not state.Fly then
             return
         end
+        local currentRoot = getRootPart(LocalPlayer)
         local currentRoot = getRootPart()
         if not currentRoot or not flyBodyVelocity or not flyBodyGyro then
             return
@@ -171,12 +220,209 @@ local function setInfJump(enabled)
         return
     end
     infJumpConn = UserInputService.JumpRequest:Connect(function()
+        local humanoid = getHumanoid(LocalPlayer)
         local humanoid = getHumanoid()
         if humanoid then
             humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
         end
     end)
 end
+
+local function createDrawings()
+    return {
+        Box = Drawing.new("Square"),
+        Tracer = Drawing.new("Line"),
+        Name = Drawing.new("Text"),
+        Distance = Drawing.new("Text"),
+        Health = Drawing.new("Text"),
+        Team = Drawing.new("Text"),
+        Arrow = Drawing.new("Triangle")
+    }
+end
+
+local function hideDrawingSet(set)
+    for _, obj in pairs(set) do
+        obj.Visible = false
+    end
+end
+
+local function removeDrawingSet(set)
+    for _, obj in pairs(set) do
+        obj:Remove()
+    end
+end
+
+local function getDrawingSet(player)
+    if not drawings[player] then
+        drawings[player] = createDrawings()
+    end
+    return drawings[player]
+end
+
+local function shouldRenderPlayer(player)
+    if player == LocalPlayer then
+        return false
+    end
+    if espState.TeamCheck and player.Team == LocalPlayer.Team then
+        return false
+    end
+    return true
+end
+
+local function worldToScreen(pos)
+    local point, onScreen = Camera:WorldToViewportPoint(pos)
+    return Vector2.new(point.X, point.Y), onScreen, point.Z
+end
+
+local function renderPlayerESP(player)
+    local set = getDrawingSet(player)
+    hideDrawingSet(set)
+
+    if not shouldRenderPlayer(player) then
+        return
+    end
+
+    local character = getCharacter(player)
+    local humanoid = getHumanoid(player)
+    local root = getRootPart(player)
+    local head = character and character:FindFirstChild("Head")
+    if not character or not humanoid or humanoid.Health <= 0 or not root or not head then
+        return
+    end
+
+    local _, headOnScreen = worldToScreen(head.Position + Vector3.new(0, 0.6, 0))
+    local rootPos, rootOnScreen, depth = worldToScreen(root.Position)
+    if depth <= 0 then
+        return
+    end
+
+    local color = espState.Color
+    local distanceStuds = math.floor((Camera.CFrame.Position - root.Position).Magnitude)
+
+    if headOnScreen and rootOnScreen then
+        local sizeY = math.clamp(2400 / depth, 22, 300)
+        local sizeX = sizeY * 0.6
+        local boxPos = Vector2.new(rootPos.X - sizeX / 2, rootPos.Y - sizeY / 2)
+
+        if espState.BoxESP then
+            set.Box.Visible = true
+            set.Box.Color = color
+            set.Box.Thickness = 2
+            set.Box.Filled = false
+            set.Box.Transparency = 1
+            set.Box.Size = Vector2.new(sizeX, sizeY)
+            set.Box.Position = boxPos
+        end
+
+        if espState.Tracers then
+            set.Tracer.Visible = true
+            set.Tracer.Color = color
+            set.Tracer.Thickness = 1.5
+            set.Tracer.Transparency = 1
+            set.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y - 24)
+            set.Tracer.To = Vector2.new(rootPos.X, rootPos.Y + sizeY / 2)
+        end
+
+        if espState.NameESP then
+            set.Name.Visible = true
+            set.Name.Color = color
+            set.Name.Size = 13
+            set.Name.Center = true
+            set.Name.Outline = true
+            set.Name.OutlineColor = Color3.new(0, 0, 0)
+            set.Name.Text = player.Name
+            set.Name.Position = Vector2.new(rootPos.X, boxPos.Y - 16)
+        end
+
+        if espState.Distance then
+            set.Distance.Visible = true
+            set.Distance.Color = color
+            set.Distance.Size = 13
+            set.Distance.Center = true
+            set.Distance.Outline = true
+            set.Distance.OutlineColor = Color3.new(0, 0, 0)
+            set.Distance.Text = tostring(distanceStuds) .. " studs"
+            set.Distance.Position = Vector2.new(rootPos.X, boxPos.Y + sizeY + 2)
+        end
+
+        if espState.HealthESP then
+            set.Health.Visible = true
+            set.Health.Color = color
+            set.Health.Size = 13
+            set.Health.Center = true
+            set.Health.Outline = true
+            set.Health.OutlineColor = Color3.new(0, 0, 0)
+            set.Health.Text = tostring(math.floor(humanoid.Health)) .. " HP"
+            set.Health.Position = Vector2.new(rootPos.X, boxPos.Y + sizeY + 16)
+        end
+
+        if espState.TeamESP then
+            local teamName = player.Team and player.Team.Name or "No Team"
+            set.Team.Visible = true
+            set.Team.Color = color
+            set.Team.Size = 13
+            set.Team.Center = true
+            set.Team.Outline = true
+            set.Team.OutlineColor = Color3.new(0, 0, 0)
+            set.Team.Text = teamName
+            set.Team.Position = Vector2.new(rootPos.X, boxPos.Y - 30)
+        end
+    elseif espState.Arrows then
+        local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        local dir3 = (root.Position - Camera.CFrame.Position).Unit
+        local camSpace = Camera.CFrame:VectorToObjectSpace(dir3)
+        local dir2 = Vector2.new(camSpace.X, -camSpace.Y)
+        if dir2.Magnitude > 0 then
+            local norm = dir2.Unit
+            local radius = math.min(Camera.ViewportSize.X, Camera.ViewportSize.Y) * 0.35
+            local tip = center + norm * radius
+            local perp = Vector2.new(-norm.Y, norm.X)
+            local left = tip - norm * 16 + perp * 10
+            local right = tip - norm * 16 - perp * 10
+
+            set.Arrow.Visible = true
+            set.Arrow.Color = color
+            set.Arrow.Filled = true
+            set.Arrow.Transparency = 1
+            set.Arrow.PointA = tip
+            set.Arrow.PointB = left
+            set.Arrow.PointC = right
+        end
+    end
+end
+
+local function setESPEnabled(enabled)
+    if espConn then
+        espConn:Disconnect()
+        espConn = nil
+    end
+
+    if not enabled then
+        for _, set in pairs(drawings) do
+            hideDrawingSet(set)
+        end
+        return
+    end
+
+    espConn = RunService.RenderStepped:Connect(function()
+        for _, player in ipairs(Players:GetPlayers()) do
+            renderPlayerESP(player)
+        end
+    end)
+end
+
+local function refreshESP()
+    local enabled = espState.BoxESP or espState.Tracers or espState.TeamESP or espState.NameESP or espState.Distance or espState.Arrows or espState.HealthESP
+    setESPEnabled(enabled)
+end
+
+Players.PlayerRemoving:Connect(function(player)
+    local set = drawings[player]
+    if set then
+        removeDrawingSet(set)
+        drawings[player] = nil
+    end
+end)
 
 local function getVehicleSeat()
     local character = LocalPlayer.Character
@@ -265,6 +511,7 @@ PlayerTab:Slider({
     Precise = 0,
     Callback = function(value)
         state.WalkSpeed = value
+        local humanoid = getHumanoid(LocalPlayer)
         local humanoid = getHumanoid()
         if humanoid then
             humanoid.WalkSpeed = value
@@ -281,6 +528,7 @@ PlayerTab:Slider({
     Precise = 0,
     Callback = function(value)
         state.JumpPower = value
+        local humanoid = getHumanoid(LocalPlayer)
         local humanoid = getHumanoid()
         if humanoid then
             humanoid.UseJumpPower = true
@@ -363,6 +611,93 @@ PlayerTab:Slider({
     end
 })
 
+EspTab:Divider({Text = "Visuals", Side = "Left"})
+
+EspTab:Toggle({
+    Name = "Box ESP",
+    Side = "Left",
+    Value = false,
+    Callback = function(enabled)
+        espState.BoxESP = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Toggle({
+    Name = "Tracers",
+    Side = "Left",
+    Value = false,
+    Callback = function(enabled)
+        espState.Tracers = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Toggle({
+    Name = "Team Check",
+    Side = "Left",
+    Value = false,
+    Callback = function(enabled)
+        espState.TeamCheck = enabled
+    end
+})
+
+EspTab:Toggle({
+    Name = "Team ESP",
+    Side = "Left",
+    Value = false,
+    Callback = function(enabled)
+        espState.TeamESP = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Toggle({
+    Name = "Name ESP",
+    Side = "Left",
+    Value = false,
+    Callback = function(enabled)
+        espState.NameESP = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Toggle({
+    Name = "Distance",
+    Side = "Right",
+    Value = false,
+    Callback = function(enabled)
+        espState.Distance = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Toggle({
+    Name = "Arrows",
+    Side = "Right",
+    Value = false,
+    Callback = function(enabled)
+        espState.Arrows = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Toggle({
+    Name = "Health ESP",
+    Side = "Right",
+    Value = false,
+    Callback = function(enabled)
+        espState.HealthESP = enabled
+        refreshESP()
+    end
+})
+
+EspTab:Colorpicker({
+    Name = "ESP Color",
+    Side = "Right",
+    Color = espState.Color,
+    Callback = function(color)
+        espState.Color = color
 PlayerTab:Toggle({
     Name = "Vehicle Fly",
     Side = "Right",
@@ -391,6 +726,11 @@ local function cleanup()
     stopFly()
     setNoclip(false)
     setInfJump(false)
+    setESPEnabled(false)
+    for _, set in pairs(drawings) do
+        removeDrawingSet(set)
+    end
+    drawings = {}
     setVehicleFly(false)
     if charAddedConn then
         charAddedConn:Disconnect()
