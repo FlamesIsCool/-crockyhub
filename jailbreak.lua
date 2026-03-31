@@ -1,741 +1,397 @@
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting          = game:GetService("Lighting")
+local UserInputService  = game:GetService("UserInputService")
+local LocalPlayer       = Players.LocalPlayer
+local Cam               = workspace.CurrentCamera
 
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
-local Bracket = loadstring(game:HttpGet("https://raw.githubusercontent.com/AlexR32/Bracket/main/BracketV32.lua"))()
-Bracket:Notification()
-Bracket:Notification2()
+local Window = Rayfield:CreateWindow({
+   Name = "Bite By Night - Crocky Hub",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "Loading...",
+   LoadingSubtitle = "by Flames",
+   ShowText = "Crocky Hub", -- for mobile users to unhide Rayfield, change if you'd like
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
 
-local Window = Bracket:Window({
-    Name = "CrockyHub - Jailbreak",
-    Enabled = true,
-    Color = Color3.new(1, 0.5, 0.25),
-    Size = UDim2.new(0, 560, 0, 540),
-    Position = UDim2.new(0.5, -280, 0.5, -270)
+   ToggleUIKeybind = "K", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from emitting warnings when the script has a version mismatch with the interface.
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "Crocky Hub"
+   },
+
+   Discord = {
+      Enabled = true, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "Yan2XC8HTx", -- The Discord invite code, do not include Discord.gg/. E.g. Discord.gg/ABCD would be ABCD
+      RememberJoins = false -- Set this to false to make them join the Discord every time they load it up
+   },
+
+   KeySystem = true, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "CrockyHub - Key",
+      Subtitle = "Key System",
+      Note = "Join discord for the key", -- Use this to tell the user how to get a key
+      FileName = "crockyKey", -- It is recommended to use something unique, as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"crockykey-2026-67-djethorne"} -- List of keys that the system will accept, can be RAW file links (pastebin, github, etc.) or simple strings ("hello", "key22")
+   }
 })
 
-local PlayerTab = Window:Tab({Name = "Player"})
-local EspTab = Window:Tab({Name = "ESP"})
-    Size = UDim2.new(0, 520, 0, 520),
-    Position = UDim2.new(0.5, -260, 0.5, -260)
+local TabMain = Window:CreateTab("Main")
+
+local Config = {
+    ESP          = false,
+    Boxes        = true,
+    Names        = true,
+    Distance     = true,
+    Tracers      = false,
+    StaffDetect  = true,
+    GenESP       = false,
+    CustomFOV    = 70,
+    GenColor     = Color3.fromRGB(0, 255, 100),
+    KillerColor  = Color3.fromRGB(255, 40, 40),
+    PlayerColor  = Color3.fromRGB(40, 200, 255),
+    StaffColor   = Color3.fromRGB(255, 215, 0),
+    FullBright   = false,
+    InfStamina   = false,
+    SnakeGod     = false,
+    AutoGenerator = false,
+    OriginalLighting = {
+        Ambient        = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        FogEnd         = Lighting.FogEnd,
+        ClockTime      = Lighting.ClockTime
+    }
+}
+
+local STAFF_GROUP_ID = 635601940
+
+local function toggleFullbright(state)
+    Config.FullBright = state
+    if state then
+        Lighting.Ambient, Lighting.OutdoorAmbient = Color3.new(1, 1, 1), Color3.new(1, 1, 1)
+        Lighting.FogEnd, Lighting.ClockTime       = 1e5, 12
+    else
+        local o = Config.OriginalLighting
+        Lighting.Ambient        = o.Ambient
+        Lighting.OutdoorAmbient = o.OutdoorAmbient
+        Lighting.FogEnd         = o.FogEnd
+        Lighting.ClockTime      = o.ClockTime
+    end
+end
+
+-- GUI
+TabMain:CreateSection("Visuals / ESP")
+TabMain:CreateToggle({ Name = "Enable ESP",       CurrentValue = false, Callback = function(v) Config.ESP = v end })
+TabMain:CreateToggle({ Name = "Boxes",            CurrentValue = true,  Callback = function(v) Config.Boxes = v end })
+TabMain:CreateToggle({ Name = "Names",            CurrentValue = true,  Callback = function(v) Config.Names = v end })
+TabMain:CreateToggle({ Name = "Distance",         CurrentValue = true,  Callback = function(v) Config.Distance = v end })
+TabMain:CreateToggle({ Name = "Tracers",          CurrentValue = false, Callback = function(v) Config.Tracers = v end })
+TabMain:CreateToggle({ Name = "Highlight Staff",  CurrentValue = true,  Callback = function(v) Config.StaffDetect = v end })
+TabMain:CreateToggle({ Name = "Generator ESP",    CurrentValue = false, Callback = function(v) Config.GenESP = v end })
+TabMain:CreateToggle({ Name = "FullBright",       CurrentValue = false, Callback = toggleFullbright })
+TabMain:CreateSlider({
+    Name         = "Custom FOV",
+    Range        = { 70, 120 },
+    Increment    = 1,
+    CurrentValue = 70,
+    Callback     = function(v) Config.CustomFOV = v end
 })
 
-local PlayerTab = Window:Tab({Name = "Player"})
+TabMain:CreateSection("Player Mods")
+TabMain:CreateToggle({ Name = "Infinite Stamina", CurrentValue = false, Callback = function(v) Config.InfStamina = v end })
 
-local state = {
-    WalkSpeed = 16,
-    JumpPower = 50,
-    Gravity = Workspace.Gravity,
-    FOV = Camera.FieldOfView,
-    InfJump = false,
-    Noclip = false,
-    Fly = false,
-    FlySpeed = 75
-}
-
-local espState = {
-    BoxESP = false,
-    Tracers = false,
-    TeamCheck = false,
-    TeamESP = false,
-    NameESP = false,
-    Distance = false,
-    Arrows = false,
-    HealthESP = false,
-    Color = Color3.fromRGB(255, 140, 60)
-    FlySpeed = 75,
-    VehicleFly = false,
-    VehicleFlySpeed = 110
-}
-
-local flyDirection = Vector3.zero
-local flyBodyVelocity
-local flyBodyGyro
-local flyConn
-local noclipConn
-local infJumpConn
-local charAddedConn
-local espConn
-
-local drawings = {}
-
-local function getCharacter(player)
-    return player.Character
-end
-
-local function getHumanoid(player)
-    local character = getCharacter(player)
-    if not character then
-        return nil
-    end
-    return character:FindFirstChildOfClass("Humanoid")
-end
-
-local function getRootPart(player)
-    local character = getCharacter(player)
-    if not character then
-        return nil
-    end
-    return character:FindFirstChild("HumanoidRootPart")
-end
-
-local function applyCharacterStats()
-    local humanoid = getHumanoid(LocalPlayer)
-local vehicleFlyConn
-local charAddedConn
-
-local function getCharacter()
-    return LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-end
-
-local function getHumanoid()
-    local character = getCharacter()
-    return character:FindFirstChildOfClass("Humanoid")
-end
-
-local function applyCharacterStats()
-    local humanoid = getHumanoid()
-    if humanoid then
-        humanoid.WalkSpeed = state.WalkSpeed
-        humanoid.JumpPower = state.JumpPower
-        humanoid.UseJumpPower = true
-    end
-end
-
-local function getRootPart()
-    local character = getCharacter()
-    return character:FindFirstChild("HumanoidRootPart")
-end
-
-local function stopFly()
-    if flyConn then
-        flyConn:Disconnect()
-        flyConn = nil
-    end
-    local root = getRootPart(LocalPlayer)
-    local root = getRootPart()
-    if root then
-        local bv = root:FindFirstChild("CrockyHubFlyVelocity")
-        local bg = root:FindFirstChild("CrockyHubFlyGyro")
-        if bv then
-            bv:Destroy()
-        end
-        if bg then
-            bg:Destroy()
-        end
-    end
-    flyBodyVelocity = nil
-    flyBodyGyro = nil
-end
-
-local function startFly()
-    stopFly()
-    local root = getRootPart(LocalPlayer)
-    local root = getRootPart()
-    if not root then
-        return
-    end
-
-    flyBodyGyro = Instance.new("BodyGyro")
-    flyBodyGyro.Name = "CrockyHubFlyGyro"
-    flyBodyGyro.P = 9e4
-    flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyBodyGyro.CFrame = root.CFrame
-    flyBodyGyro.Parent = root
-
-    flyBodyVelocity = Instance.new("BodyVelocity")
-    flyBodyVelocity.Name = "CrockyHubFlyVelocity"
-    flyBodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    flyBodyVelocity.Velocity = Vector3.zero
-    flyBodyVelocity.Parent = root
-
-    flyConn = RunService.RenderStepped:Connect(function()
-        if not state.Fly then
-            return
-        end
-        local currentRoot = getRootPart(LocalPlayer)
-        local currentRoot = getRootPart()
-        if not currentRoot or not flyBodyVelocity or not flyBodyGyro then
-            return
-        end
-
-        local cam = Workspace.CurrentCamera
-        local moveVec = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            moveVec += cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            moveVec -= cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            moveVec -= cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            moveVec += cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            moveVec += cam.CFrame.UpVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            moveVec -= cam.CFrame.UpVector
-        end
-
-        flyDirection = moveVec.Magnitude > 0 and moveVec.Unit or Vector3.zero
-        flyBodyVelocity.Velocity = flyDirection * state.FlySpeed
-        flyBodyGyro.CFrame = cam.CFrame
-    end)
-end
-
-local function setNoclip(enabled)
-    if noclipConn then
-        noclipConn:Disconnect()
-        noclipConn = nil
-    end
-    if not enabled then
-        return
-    end
-    noclipConn = RunService.Stepped:Connect(function()
-        local character = LocalPlayer.Character
-        if not character then
-            return
-        end
-        for _, obj in ipairs(character:GetDescendants()) do
-            if obj:IsA("BasePart") then
-                obj.CanCollide = false
+TabMain:CreateSection("Generator")
+TabMain:CreateToggle({ Name = "Auto-Complete Generator", CurrentValue = false, Callback = function(v) Config.AutoGenerator = v end })
+TabMain:CreateButton({
+    Name     = "Instant Finish Current Gen",
+    Callback = function()
+        pcall(function()
+            for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                if v.Name == "GeneratorMain" and v:IsA("LocalScript") then
+                    local e = v:FindFirstChild("Event")
+                    if e then
+                        e:FireServer({ Lever = true, Switches = true, Wires = true })
+                    end
+                end
             end
+        end)
+    end
+})
+
+TabMain:CreateSection("Snake Minigame")
+TabMain:CreateToggle({ Name = "Snake God Mode",  CurrentValue = false, Callback = function(v) Config.SnakeGod = v end })
+
+TabMain:CreateSection("Emotes")
+TabMain:CreateButton({
+    Name = "Stop Current Emote",
+    Callback = function()
+        if _G.__current_emote then
+            local t, s = _G.__current_emote.track, _G.__current_emote.sound
+            if t then pcall(function() t:Stop() end) end
+            if s then pcall(function() s:Destroy() end) end
+            _G.__current_emote = nil
         end
-    end)
+    end
+})
+
+local emotesFolder = ReplicatedStorage:FindFirstChild("Modules")
+    and ReplicatedStorage.Modules:FindFirstChild("Emotes")
+
+if emotesFolder then
+    for _, em in ipairs(emotesFolder:GetChildren()) do
+        if em:IsA("ModuleScript") then
+            TabMain:CreateButton({
+                Name = em.Name,
+                Callback = function()
+                    local loop = em:FindFirstChild("Loop")
+                    local snd  = em:FindFirstChild("Sound")
+
+                    if _G.__current_emote then
+                        local t, s = _G.__current_emote.track, _G.__current_emote.sound
+                        if t then pcall(function() t:Stop() end) end
+                        if s then pcall(function() s:Destroy() end) end
+                    end
+
+                    if loop and LocalPlayer.Character then
+                        local hum  = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                        local root = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if hum and root then
+                            local track = hum:LoadAnimation(loop)
+                            track.Looped = true
+                            track:Play()
+                            local sound
+                            if snd then
+                                sound = snd:Clone()
+                                sound.Parent = root
+                                sound:Play()
+                            end
+                            _G.__current_emote = { track = track, sound = sound }
+                        end
+                    end
+                end
+            })
+        end
+    end
 end
 
-local function setInfJump(enabled)
-    if infJumpConn then
-        infJumpConn:Disconnect()
-        infJumpConn = nil
-    end
-    if not enabled then
-        return
-    end
-    infJumpConn = UserInputService.JumpRequest:Connect(function()
-        local humanoid = getHumanoid(LocalPlayer)
-        local humanoid = getHumanoid()
-        if humanoid then
-            humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-        end
-    end)
-end
+-- Player ESP
+local ESP_Cache = {}
 
-local function createDrawings()
-    return {
-        Box = Drawing.new("Square"),
-        Tracer = Drawing.new("Line"),
-        Name = Drawing.new("Text"),
-        Distance = Drawing.new("Text"),
-        Health = Drawing.new("Text"),
-        Team = Drawing.new("Text"),
-        Arrow = Drawing.new("Triangle")
+local function newESP(plr)
+    ESP_Cache[plr] = {
+        Box    = Drawing.new("Square"),
+        Name   = Drawing.new("Text"),
+        Dist   = Drawing.new("Text"),
+        Tracer = Drawing.new("Line")
     }
 end
 
-local function hideDrawingSet(set)
-    for _, obj in pairs(set) do
-        obj.Visible = false
+local function delESP(plr)
+    local t = ESP_Cache[plr]
+    if t then
+        for _, o in pairs(t) do o:Remove() end
+        ESP_Cache[plr] = nil
     end
 end
 
-local function removeDrawingSet(set)
-    for _, obj in pairs(set) do
-        obj:Remove()
-    end
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then newESP(p) end
 end
+Players.PlayerAdded:Connect(function(p) if p ~= LocalPlayer then newESP(p) end end)
+Players.PlayerRemoving:Connect(delESP)
 
-local function getDrawingSet(player)
-    if not drawings[player] then
-        drawings[player] = createDrawings()
-    end
-    return drawings[player]
-end
+RunService.RenderStepped:Connect(function()
+    for plr, esp in pairs(ESP_Cache) do
+        local char = plr.Character
+        local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
 
-local function shouldRenderPlayer(player)
-    if player == LocalPlayer then
-        return false
-    end
-    if espState.TeamCheck and player.Team == LocalPlayer.Team then
-        return false
-    end
-    return true
-end
+        if Config.ESP and hrp and hum and hum.Health > 0 then
+            local pos, onScreen = Cam:WorldToViewportPoint(hrp.Position)
+            if onScreen then
+                local dist  = (Cam.CFrame.Position - hrp.Position).Magnitude
+                local scale = 1000 / (dist * (Cam.FieldOfView / 100))
+                local color = Config.PlayerColor
 
-local function worldToScreen(pos)
-    local point, onScreen = Camera:WorldToViewportPoint(pos)
-    return Vector2.new(point.X, point.Y), onScreen, point.Z
-end
+                if char.Parent and char.Parent.Name == "KILLER" then
+                    color = Config.KillerColor
+                end
+                if Config.StaffDetect then
+                    pcall(function()
+                        if plr:GetRankInGroup(STAFF_GROUP_ID) > 0 then
+                            color = Config.StaffColor
+                        end
+                    end)
+                end
 
-local function renderPlayerESP(player)
-    local set = getDrawingSet(player)
-    hideDrawingSet(set)
+                esp.Box.Visible      = Config.Boxes
+                esp.Box.Size         = Vector2.new(scale, scale * 1.5)
+                esp.Box.Position     = Vector2.new(pos.X - scale / 2, pos.Y - scale / 1.2)
+                esp.Box.Color        = color
+                esp.Box.Thickness    = 1.5
 
-    if not shouldRenderPlayer(player) then
-        return
-    end
+                esp.Name.Visible     = Config.Names
+                esp.Name.Text        = plr.Name
+                esp.Name.Position    = Vector2.new(pos.X, pos.Y - scale / 1.2 - 20)
+                esp.Name.Color       = color
+                esp.Name.Center      = true
+                esp.Name.Size        = 16
+                esp.Name.Outline     = true
 
-    local character = getCharacter(player)
-    local humanoid = getHumanoid(player)
-    local root = getRootPart(player)
-    local head = character and character:FindFirstChild("Head")
-    if not character or not humanoid or humanoid.Health <= 0 or not root or not head then
-        return
-    end
+                esp.Dist.Visible     = Config.Distance
+                esp.Dist.Text        = string.format("%dm", dist)
+                esp.Dist.Position    = Vector2.new(pos.X, pos.Y + scale / 1.5 + 5)
+                esp.Dist.Color       = color
+                esp.Dist.Center      = true
+                esp.Dist.Size        = 14
+                esp.Dist.Outline     = true
 
-    local _, headOnScreen = worldToScreen(head.Position + Vector3.new(0, 0.6, 0))
-    local rootPos, rootOnScreen, depth = worldToScreen(root.Position)
-    if depth <= 0 then
-        return
-    end
-
-    local color = espState.Color
-    local distanceStuds = math.floor((Camera.CFrame.Position - root.Position).Magnitude)
-
-    if headOnScreen and rootOnScreen then
-        local sizeY = math.clamp(2400 / depth, 22, 300)
-        local sizeX = sizeY * 0.6
-        local boxPos = Vector2.new(rootPos.X - sizeX / 2, rootPos.Y - sizeY / 2)
-
-        if espState.BoxESP then
-            set.Box.Visible = true
-            set.Box.Color = color
-            set.Box.Thickness = 2
-            set.Box.Filled = false
-            set.Box.Transparency = 1
-            set.Box.Size = Vector2.new(sizeX, sizeY)
-            set.Box.Position = boxPos
+                esp.Tracer.Visible   = Config.Tracers
+                esp.Tracer.From      = Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y)
+                esp.Tracer.To        = Vector2.new(pos.X, pos.Y + scale / 1.5)
+                esp.Tracer.Color     = color
+                esp.Tracer.Thickness = 1.5
+            else
+                for _, o in pairs(esp) do o.Visible = false end
+            end
+        else
+            for _, o in pairs(esp) do o.Visible = false end
         end
-
-        if espState.Tracers then
-            set.Tracer.Visible = true
-            set.Tracer.Color = color
-            set.Tracer.Thickness = 1.5
-            set.Tracer.Transparency = 1
-            set.Tracer.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y - 24)
-            set.Tracer.To = Vector2.new(rootPos.X, rootPos.Y + sizeY / 2)
-        end
-
-        if espState.NameESP then
-            set.Name.Visible = true
-            set.Name.Color = color
-            set.Name.Size = 13
-            set.Name.Center = true
-            set.Name.Outline = true
-            set.Name.OutlineColor = Color3.new(0, 0, 0)
-            set.Name.Text = player.Name
-            set.Name.Position = Vector2.new(rootPos.X, boxPos.Y - 16)
-        end
-
-        if espState.Distance then
-            set.Distance.Visible = true
-            set.Distance.Color = color
-            set.Distance.Size = 13
-            set.Distance.Center = true
-            set.Distance.Outline = true
-            set.Distance.OutlineColor = Color3.new(0, 0, 0)
-            set.Distance.Text = tostring(distanceStuds) .. " studs"
-            set.Distance.Position = Vector2.new(rootPos.X, boxPos.Y + sizeY + 2)
-        end
-
-        if espState.HealthESP then
-            set.Health.Visible = true
-            set.Health.Color = color
-            set.Health.Size = 13
-            set.Health.Center = true
-            set.Health.Outline = true
-            set.Health.OutlineColor = Color3.new(0, 0, 0)
-            set.Health.Text = tostring(math.floor(humanoid.Health)) .. " HP"
-            set.Health.Position = Vector2.new(rootPos.X, boxPos.Y + sizeY + 16)
-        end
-
-        if espState.TeamESP then
-            local teamName = player.Team and player.Team.Name or "No Team"
-            set.Team.Visible = true
-            set.Team.Color = color
-            set.Team.Size = 13
-            set.Team.Center = true
-            set.Team.Outline = true
-            set.Team.OutlineColor = Color3.new(0, 0, 0)
-            set.Team.Text = teamName
-            set.Team.Position = Vector2.new(rootPos.X, boxPos.Y - 30)
-        end
-    elseif espState.Arrows then
-        local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        local dir3 = (root.Position - Camera.CFrame.Position).Unit
-        local camSpace = Camera.CFrame:VectorToObjectSpace(dir3)
-        local dir2 = Vector2.new(camSpace.X, -camSpace.Y)
-        if dir2.Magnitude > 0 then
-            local norm = dir2.Unit
-            local radius = math.min(Camera.ViewportSize.X, Camera.ViewportSize.Y) * 0.35
-            local tip = center + norm * radius
-            local perp = Vector2.new(-norm.Y, norm.X)
-            local left = tip - norm * 16 + perp * 10
-            local right = tip - norm * 16 - perp * 10
-
-            set.Arrow.Visible = true
-            set.Arrow.Color = color
-            set.Arrow.Filled = true
-            set.Arrow.Transparency = 1
-            set.Arrow.PointA = tip
-            set.Arrow.PointB = left
-            set.Arrow.PointC = right
-        end
-    end
-end
-
-local function setESPEnabled(enabled)
-    if espConn then
-        espConn:Disconnect()
-        espConn = nil
-    end
-
-    if not enabled then
-        for _, set in pairs(drawings) do
-            hideDrawingSet(set)
-        end
-        return
-    end
-
-    espConn = RunService.RenderStepped:Connect(function()
-        for _, player in ipairs(Players:GetPlayers()) do
-            renderPlayerESP(player)
-        end
-    end)
-end
-
-local function refreshESP()
-    local enabled = espState.BoxESP or espState.Tracers or espState.TeamESP or espState.NameESP or espState.Distance or espState.Arrows or espState.HealthESP
-    setESPEnabled(enabled)
-end
-
-Players.PlayerRemoving:Connect(function(player)
-    local set = drawings[player]
-    if set then
-        removeDrawingSet(set)
-        drawings[player] = nil
     end
 end)
 
-local function getVehicleSeat()
-    local character = LocalPlayer.Character
-    if not character then
-        return nil
+-- Generator ESP
+local Gen_Cache = {}
+
+local function registerGen(model)
+    if Gen_Cache[model] then return end
+    local part = model.PrimaryPart
+        or model:FindFirstChildWhichIsA("BasePart")
+        or model:FindFirstChild("Main")
+        or model:FindFirstChild("GeneratorMain")
+    if part then
+        Gen_Cache[model] = { Part = part, Text = Drawing.new("Text") }
     end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then
-        return nil
-    end
-    local seatPart = humanoid.SeatPart
-    if seatPart and (seatPart:IsA("VehicleSeat") or seatPart:IsA("Seat")) then
-        return seatPart
-    end
-    return nil
 end
 
-local function setVehicleFly(enabled)
-    if vehicleFlyConn then
-        vehicleFlyConn:Disconnect()
-        vehicleFlyConn = nil
-    end
-    if not enabled then
-        return
-    end
+for _, o in ipairs(workspace:GetDescendants()) do
+    if o:IsA("Model") and o.Name == "Generator" then registerGen(o) end
+end
+workspace.DescendantAdded:Connect(function(o)
+    if o:IsA("Model") and o.Name == "Generator" then registerGen(o) end
+end)
 
-    vehicleFlyConn = RunService.Heartbeat:Connect(function(dt)
-        local seat = getVehicleSeat()
-        if not seat then
-            return
-        end
-        local assembly = seat.AssemblyRootPart or seat
-        if not assembly then
-            return
-        end
-
-        local cam = Workspace.CurrentCamera
-        local direction = Vector3.zero
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            direction += cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            direction -= cam.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            direction -= cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            direction += cam.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            direction += cam.CFrame.UpVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-            direction -= cam.CFrame.UpVector
-        end
-
-        if direction.Magnitude > 0 then
-            assembly.AssemblyLinearVelocity = direction.Unit * state.VehicleFlySpeed
+RunService.RenderStepped:Connect(function()
+    for model, e in pairs(Gen_Cache) do
+        local part = e.Part
+        if Config.GenESP and part and part.Parent then
+            local pos, onScreen = Cam:WorldToViewportPoint(part.Position)
+            if onScreen then
+                local d = (Cam.CFrame.Position - part.Position).Magnitude
+                e.Text.Visible   = true
+                e.Text.Text      = string.format("[Generator]\n%dm", d)
+                e.Text.Position  = Vector2.new(pos.X, pos.Y)
+                e.Text.Center    = true
+                e.Text.Outline   = true
+                e.Text.Color     = Config.GenColor
+            else
+                e.Text.Visible = false
+            end
         else
-            assembly.AssemblyLinearVelocity = Vector3.zero
+            e.Text.Visible = false
         end
-        assembly.AssemblyAngularVelocity = Vector3.zero
-
-        local move = direction.Magnitude > 0 and direction.Unit * state.VehicleFlySpeed * dt or Vector3.zero
-        assembly.CFrame = CFrame.new(assembly.Position + move, assembly.Position + cam.CFrame.LookVector)
-    end)
-end
-
-charAddedConn = LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(0.2)
-    applyCharacterStats()
-    if state.Fly then
-        startFly()
     end
 end)
 
-PlayerTab:Divider({Text = "Movement", Side = "Left"})
+-- Camera FOV
+RunService:BindToRenderStep("HubFOV", Enum.RenderPriority.Camera.Value + 1, function()
+    if Cam and Cam.FieldOfView ~= Config.CustomFOV then
+        Cam.FieldOfView = Config.CustomFOV
+    end
+end)
 
-PlayerTab:Slider({
-    Name = "WalkSpeed",
-    Side = "Left",
-    Min = 0,
-    Max = 300,
-    Value = state.WalkSpeed,
-    Precise = 0,
-    Callback = function(value)
-        state.WalkSpeed = value
-        local humanoid = getHumanoid(LocalPlayer)
-        local humanoid = getHumanoid()
-        if humanoid then
-            humanoid.WalkSpeed = value
+-- Infinite Stamina
+RunService.Stepped:Connect(function()
+    if Config.InfStamina then
+        pcall(function()
+            LocalPlayer:SetAttribute("Stamina", 100)
+            if LocalPlayer.Character then
+                LocalPlayer.Character:SetAttribute("Stamina", 100)
+            end
+            local s = LocalPlayer:FindFirstChild("Stats") or LocalPlayer:FindFirstChild("leaderstats")
+            if s and s:FindFirstChild("Stamina") then
+                s.Stamina.Value = 100
+            end
+        end)
+    end
+end)
+
+-- Snake hacks
+local function applySnakeHacks()
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "ClassName") == "Game" then
+            v.CheckForDeath = function(self)
+                if Config.SnakeGod then return false end
+                return self:CheckForDeath()
+            end
+            _G.MaxSnake = function()
+                if v.Snake then
+                    v.Snake.Length = (v.GridSize * v.GridSize) - 2
+                    v:IncrementScore()
+                end
+            end
         end
-    end
-})
-
-PlayerTab:Slider({
-    Name = "JumpPower",
-    Side = "Left",
-    Min = 0,
-    Max = 300,
-    Value = state.JumpPower,
-    Precise = 0,
-    Callback = function(value)
-        state.JumpPower = value
-        local humanoid = getHumanoid(LocalPlayer)
-        local humanoid = getHumanoid()
-        if humanoid then
-            humanoid.UseJumpPower = true
-            humanoid.JumpPower = value
-        end
-    end
-})
-
-PlayerTab:Slider({
-    Name = "Gravity",
-    Side = "Left",
-    Min = 0,
-    Max = 500,
-    Value = state.Gravity,
-    Precise = 0,
-    Callback = function(value)
-        state.Gravity = value
-        Workspace.Gravity = value
-    end
-})
-
-PlayerTab:Slider({
-    Name = "FOV",
-    Side = "Left",
-    Min = 40,
-    Max = 120,
-    Value = state.FOV,
-    Precise = 0,
-    Callback = function(value)
-        state.FOV = value
-        Workspace.CurrentCamera.FieldOfView = value
-    end
-})
-
-PlayerTab:Toggle({
-    Name = "InfJump",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        state.InfJump = enabled
-        setInfJump(enabled)
-    end
-})
-
-PlayerTab:Toggle({
-    Name = "Noclip",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        state.Noclip = enabled
-        setNoclip(enabled)
-    end
-})
-
-PlayerTab:Divider({Text = "Flight", Side = "Right"})
-
-PlayerTab:Toggle({
-    Name = "Fly",
-    Side = "Right",
-    Value = false,
-    Callback = function(enabled)
-        state.Fly = enabled
-        if enabled then
-            startFly()
-        else
-            stopFly()
-        end
-    end
-})
-
-PlayerTab:Slider({
-    Name = "Fly Speed",
-    Side = "Right",
-    Min = 10,
-    Max = 400,
-    Value = state.FlySpeed,
-    Precise = 0,
-    Callback = function(value)
-        state.FlySpeed = value
-    end
-})
-
-EspTab:Divider({Text = "Visuals", Side = "Left"})
-
-EspTab:Toggle({
-    Name = "Box ESP",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        espState.BoxESP = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Toggle({
-    Name = "Tracers",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        espState.Tracers = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Toggle({
-    Name = "Team Check",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        espState.TeamCheck = enabled
-    end
-})
-
-EspTab:Toggle({
-    Name = "Team ESP",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        espState.TeamESP = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Toggle({
-    Name = "Name ESP",
-    Side = "Left",
-    Value = false,
-    Callback = function(enabled)
-        espState.NameESP = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Toggle({
-    Name = "Distance",
-    Side = "Right",
-    Value = false,
-    Callback = function(enabled)
-        espState.Distance = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Toggle({
-    Name = "Arrows",
-    Side = "Right",
-    Value = false,
-    Callback = function(enabled)
-        espState.Arrows = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Toggle({
-    Name = "Health ESP",
-    Side = "Right",
-    Value = false,
-    Callback = function(enabled)
-        espState.HealthESP = enabled
-        refreshESP()
-    end
-})
-
-EspTab:Colorpicker({
-    Name = "ESP Color",
-    Side = "Right",
-    Color = espState.Color,
-    Callback = function(color)
-        espState.Color = color
-PlayerTab:Toggle({
-    Name = "Vehicle Fly",
-    Side = "Right",
-    Value = false,
-    Callback = function(enabled)
-        state.VehicleFly = enabled
-        setVehicleFly(enabled)
-    end
-})
-
-PlayerTab:Slider({
-    Name = "Vehicle Fly Speed",
-    Side = "Right",
-    Min = 10,
-    Max = 500,
-    Value = state.VehicleFlySpeed,
-    Precise = 0,
-    Callback = function(value)
-        state.VehicleFlySpeed = value
-    end
-})
-
-applyCharacterStats()
-
-local function cleanup()
-    stopFly()
-    setNoclip(false)
-    setInfJump(false)
-    setESPEnabled(false)
-    for _, set in pairs(drawings) do
-        removeDrawingSet(set)
-    end
-    drawings = {}
-    setVehicleFly(false)
-    if charAddedConn then
-        charAddedConn:Disconnect()
-        charAddedConn = nil
     end
 end
+applySnakeHacks()
 
-Window.OnClose = cleanup
+-- Auto complete generator
+RunService.Heartbeat:Connect(function()
+    if Config.AutoGenerator then
+        pcall(function()
+            for _, v in pairs(LocalPlayer.PlayerGui:GetDescendants()) do
+                if v.Name == "GeneratorMain" and v:IsA("LocalScript") then
+                    local e = v:FindFirstChild("Event")
+                    if e then
+                        e:FireServer({ Lever = true, Switches = true, Wires = true })
+                    end
+                end
+            end
+        end)
+    end
+end)
+
+-- Staff notifications
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= LocalPlayer then
+        pcall(function()
+            if p:GetRankInGroup(STAFF_GROUP_ID) > 1 then
+                Rayfield:Notify({
+                    Title   = "STAFF DETECTED",
+                    Content = p.Name .. " is a game admin.",
+                    Duration = 8
+                })
+            end
+        end)
+    end
+end
+Players.PlayerAdded:Connect(function(p)
+    pcall(function()
+        if p:GetRankInGroup(STAFF_GROUP_ID) > 1 then
+            Rayfield:Notify({
+                Title   = "STAFF DETECTED",
+                Content = p.Name .. " joined (admin).",
+                Duration = 8
+            })
+        end
+    end)
+end)
